@@ -1,0 +1,23 @@
+[project]
+name = "chronodump"
+version = "1.0.0"
+description = "Local-first autonomous AI agent converting messy Telegram voice/text dumps into structured tasks and auto-armed reminders"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.13.0",
+    "faster-whisper>=1.0.0",
+    "ollama>=0.3.0",
+    "pydantic>=2.7.0",
+    "apscheduler>=3.10.4",
+    "sqlalchemy>=2.0.30",
+    "python-dotenv>=1.0.1",
+    "python-dateutil>=2.9.0",
+    "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
