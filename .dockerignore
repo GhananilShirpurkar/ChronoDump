@@ -1,0 +1,49 @@
+# ==============================================================================
+# ChronoDump Docker Build Ignore
+# ==============================================================================
+
+# Virtual Environment & Python cache
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Git & Version Control
+.git/
+.gitignore
+
+# IDE & Editor configs
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Testing & CI
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+.github/
+
+# Runtime data & Local Secrets (CRITICAL)
+.env
+*.env
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Design & Non-runtime Docs
+docs/
+assets/
+*.md
+!README.md

@@ -449,7 +449,10 @@ ChronoDump/
 │   ├── config.py              # Environment configuration loader
 │   └── main.py                # Bot startup and lifecycle entrypoint
 ├── docs/
-│   └── DEPLOYMENT.md          # Comprehensive production ops and deployment guide
+│   ├── ARCHITECTURE.md        # System architecture, topology, and data flow specification
+│   ├── DEPLOYMENT.md          # Comprehensive production ops and deployment guide
+│   ├── PRD.md                 # Full Product Requirements Document (PRD)
+│   └── TECHSTACK.md           # Deep dive into technology stack and boundaries
 ├── scripts/
 │   ├── backup.sh              # SQLite snapshot and retention management
 │   ├── deploy.sh              # 5-phase zero-downtime deployment runner
@@ -462,7 +465,13 @@ ChronoDump/
 │   ├── test_scheduler.py      # SQLite persistence, restart recovery, snooze, undo
 │   ├── test_schema.py         # Pydantic schema validation & JSON parser tests
 │   └── test_temporal.py       # Relative, absolute, and vague time unit tests
+├── .dockerignore              # Docker context ignore rules
+├── .editorconfig              # Cross-IDE indentation & formatting standards
 ├── .env.example               # Secrets and configuration template
+├── .github/workflows/ci.yml   # Automated GitHub Actions CI workflow
+├── ARCHITECTURE.md            # System architecture reference
+├── CODEBASE.md                # Codebase map and developer orientation
+├── Makefile                   # Production & developer command suite
 ├── chronodump.service         # Systemd unit service definition
 ├── docker-compose.yml         # Bot container with host Ollama
 ├── docker-compose.full.yml    # Full-stack Bot + Ollama Compose stack
