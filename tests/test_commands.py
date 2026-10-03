@@ -61,7 +61,7 @@ def test_today_agenda_query_and_formatting():
     assert today_rems[0].task == "Finish report"
 
     card = format_today_agenda(now, today_rems, [{"action": "Buy paper"}], 3)
-    assert "Today's Agenda" in card
+    assert "TODAY'S RADAR" in card
     assert "Finish report" in card
     assert "Buy paper" in card
 
@@ -103,7 +103,7 @@ def test_focus_mode_lifecycle():
     assert (active_focus - now).total_seconds() > 7000
 
     msg = format_focus_status(active_focus, now)
-    assert "Focus Mode is ACTIVE" in msg
+    assert "DEEP FOCUS ACTIVE" in msg
 
     # Clear focus
     set_user_focus(user_id, None)
@@ -127,7 +127,7 @@ def test_notes_view_and_export():
     assert notes[0]["note"] == "Fact A: Database architecture"
 
     notes_msg = format_notes_view(notes)
-    assert "Your Clean Notes Repository" in notes_msg
+    assert "CLEAN NOTES REPOSITORY" in notes_msg
     assert "Fact A: Database architecture" in notes_msg
 
     # Test export document
@@ -147,6 +147,6 @@ def test_stats_view():
     assert "db_size_kb" in stats
 
     msg = format_stats_view(stats)
-    assert "ChronoDump System & AI Stats" in msg
+    assert "CHRONODUMP SYSTEM & AI STATS" in msg
     assert "faster-whisper" in msg
     assert "Ollama" in msg

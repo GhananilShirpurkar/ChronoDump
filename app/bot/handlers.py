@@ -2,7 +2,7 @@
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 from aiogram import Bot, F, Router
@@ -20,19 +20,35 @@ from app.bot.keyboards import (
     get_timezone_keyboard,
 )
 from app.bot.messages import (
+    format_analyzing_text,
+    format_audio_error,
+    format_clarification_dismissed,
+    format_clarification_resolved,
     format_confirm_completion,
+    format_export_caption,
+    format_focus_ended,
     format_focus_status,
+    format_generic_error,
+    format_help,
     format_notes_view,
+    format_queue_action_cancelled,
+    format_queue_action_done,
+    format_queue_action_snoozed,
     format_queue_header,
+    format_queue_item_card,
+    format_reminder_alert,
     format_response_card,
     format_start_welcome,
     format_stats_view,
+    format_synthesizing_dump,
     format_task_completed,
     format_task_restored,
     format_task_snoozed,
+    format_timezone_custom_prompt,
     format_timezone_prompt,
     format_timezone_updated,
     format_today_agenda,
+    format_transcribing_voice,
 )
 from app.config import settings
 from app.ingestion.audio import AudioIngestion
@@ -128,12 +144,7 @@ async def handle_queue_command(message: Message) -> None:
 
     await message.answer(format_queue_header(len(pending)), parse_mode="Markdown")
     for r in pending[:10]:
-        status_emoji = "⏳" if r.status == "snoozed" else "🔔"
-        card = (
-            f"{status_emoji} **{r.task}**\n"
-            f"• ⏰ Scheduled: `{r.display_time}`\n"
-            f"• 📌 Status: `{r.status.upper()}`"
-        )
+        card = format_queue_item_card(r.task, r.display_time, r.status)
         await message.answer(card, reply_markup=get_queue_item_keyboard(r.id), parse_mode="Markdown")
 
 
@@ -159,7 +170,7 @@ async def handle_focus_command(message: Message) -> None:
         arg = args[0].lower().strip()
         if arg in ("off", "stop", "cancel", "end"):
             set_user_focus(message.from_user.id, None)
-            await message.answer("🛑 **Focus Mode ended.** All notifications restored.", parse_mode="Markdown")
+            await message.answer(format_focus_ended(), parse_mode="Markdown")
             return
 
         # Parse duration (e.g. 2h, 30m, 90m, 1.5h)
@@ -173,7 +184,7 @@ async def handle_focus_command(message: Message) -> None:
             set_user_focus(message.from_user.id, focus_until)
             time_str = focus_until.astimezone(get_user_timezone(message.from_user.id)).strftime("%I:%M %p")
             await message.answer(
-                f"🧘 **Focus Mode activated for {mins} minutes** (until {time_str}).\n\n"
+                f"🧘 **Deep Focus activated for {mins} minutes** (until {time_str}).\n\n"
                 "Reminders will be delayed until your focus block ends. Use `/focus off` to cancel anytime.",
                 reply_markup=get_focus_keyboard(is_active=True),
                 parse_mode="Markdown",
@@ -210,30 +221,15 @@ async def handle_export_command(message: Message) -> None:
 
     await message.answer_document(
         doc,
-        caption="📦 **Here is your complete ChronoDump export in Markdown!**\n\nReady to drop into Obsidian, Notion, or Apple Notes.",
+        caption=format_export_caption(),
         parse_mode="Markdown",
     )
 
 
 @router.message(Command("help"))
-async def handle_help(message: Message) -> None:
+async def handle_help_command(message: Message) -> None:
     """Handle /help command with full command directory."""
-    text = (
-        "⚡ **ChronoDump Command Center**\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "_Turn raw audio chaos into structured plans and auto-armed reminders._\n\n"
-        "🎯 **Available Slash Commands:**\n"
-        "• `/today` — Today's mission radar & armed reminders\n"
-        "• `/queue` — View & manage all upcoming alerts interactively\n"
-        "• `/notes` — Browse your clean notes & knowledge base\n"
-        "• `/focus` — Silence alerts for deep work (`/focus 1h` or tap buttons)\n"
-        "• `/stats` — Local AI engine specs & activity metrics\n"
-        "• `/export` — Export all notes & tasks to a Markdown file\n"
-        "• `/timezone` — Check or change your active timezone\n"
-        "• `/help` — Display this command manual\n\n"
-        "💡 **Pro-Tip:** Just drop or forward a voice note anytime. ChronoDump automatically listens, extracts tasks, and arms the reminders for you."
-    )
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(format_help(), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +245,7 @@ async def handle_timezone_callback(callback: CallbackQuery) -> None:
 
     if selected_tz == "custom":
         await callback.message.edit_text(
-            "Please reply with your standard IANA timezone (e.g. `America/Chicago`, `Europe/London`, `Asia/Tokyo`) or UTC offset (e.g. `+05:30`, `-04:00`):",
+            format_timezone_custom_prompt(),
             parse_mode="Markdown",
         )
         await callback.answer()
@@ -280,7 +276,7 @@ async def handle_focus_callback(callback: CallbackQuery) -> None:
 
     if action == "off":
         set_user_focus(callback.from_user.id, None)
-        await callback.message.edit_text("🛑 **Focus Mode ended.** All notifications restored.", parse_mode="Markdown")
+        await callback.message.edit_text(format_focus_ended(), parse_mode="Markdown")
         await callback.answer("Focus Mode turned off.")
         return
 
@@ -317,7 +313,7 @@ async def handle_queue_reminder_action(callback: CallbackQuery) -> None:
 
     if action == "done":
         complete_reminder(reminder_id)
-        await callback.message.edit_text(f"✅ Marked **{reminder.task}** complete!", parse_mode="Markdown")
+        await callback.message.edit_text(format_queue_action_done(reminder.task), parse_mode="Markdown")
         await callback.answer("Marked done! ✅")
 
     elif action == "snooze":
@@ -327,13 +323,13 @@ async def handle_queue_reminder_action(callback: CallbackQuery) -> None:
         new_display = TemporalEngine.format_display_time(new_target, now)
         new_job_id = scheduler_service.reschedule_reminder(reminder_id, new_target)
         snooze_reminder(reminder_id, new_target, new_display, new_job_id)
-        await callback.message.edit_text(f"⏳ Snoozed **{reminder.task}** for 30 minutes (until {new_display}).", parse_mode="Markdown")
+        await callback.message.edit_text(format_queue_action_snoozed(reminder.task, new_display), parse_mode="Markdown")
         await callback.answer("Snoozed +30m! ⏳")
 
     elif action == "cancel":
         cancel_reminder(reminder_id)
         scheduler_service.cancel_job(f"rem_{reminder_id}")
-        await callback.message.edit_text(f"❌ Cancelled reminder: **{reminder.task}**", parse_mode="Markdown")
+        await callback.message.edit_text(format_queue_action_cancelled(reminder.task), parse_mode="Markdown")
         await callback.answer("Reminder cancelled.")
 
 
@@ -368,7 +364,7 @@ async def handle_reminder_cancel_done(callback: CallbackQuery) -> None:
         return
 
     await callback.message.edit_text(
-        f"⏰ **Heads up:**\n\n**{reminder.task}**\n\nYou wanted this done right now.",
+        format_reminder_alert(reminder.task),
         reply_markup=get_reminder_action_keyboard(reminder_id),
         parse_mode="Markdown",
     )
@@ -466,7 +462,7 @@ async def handle_clarification_pick(callback: CallbackQuery) -> None:
     if "no rush" in chosen_option.lower():
         resolve_vague_clarification(clarification_id, "dismissed_no_rush")
         await callback.message.edit_text(
-            f"👍 Moved \"**{clarification.task}**\" to Clean Notes (no reminder set).",
+            format_clarification_dismissed(clarification.task),
             parse_mode="Markdown",
         )
         await callback.answer()
@@ -494,9 +490,7 @@ async def handle_clarification_pick(callback: CallbackQuery) -> None:
     resolve_vague_clarification(clarification_id, "clarified")
 
     await callback.message.edit_text(
-        f"🔔 **Armed:** \"**{clarification.task}**\"\n"
-        f"Scheduled for **{display_time}**.\n\n"
-        "I'll buzz you right here when it's time! 🫡",
+        format_clarification_resolved(clarification.task, display_time),
         parse_mode="Markdown",
     )
     await callback.answer("Reminder scheduled! 🔔")
@@ -513,7 +507,7 @@ async def handle_clarification_no_rush(callback: CallbackQuery) -> None:
 
     resolve_vague_clarification(clarification_id, "dismissed_no_rush")
     await callback.message.edit_text(
-        f"👍 Moved \"**{clarification.task}**\" to Clean Notes (no reminder set).",
+        format_clarification_dismissed(clarification.task),
         parse_mode="Markdown",
     )
     await callback.answer("Moved to Clean Notes.")
@@ -533,7 +527,7 @@ async def handle_voice_message(message: Message, bot: Bot) -> None:
     user_tz = ZoneInfo(user.timezone)
 
     status_msg = await message.answer(
-        "🎙️ **Transcribing voice note...**\n_Filtering background noise with Silero VAD..._",
+        format_transcribing_voice(),
         parse_mode="Markdown",
     )
 
@@ -552,11 +546,11 @@ async def handle_voice_message(message: Message, bot: Bot) -> None:
         transcript, error_msg = transcriber.transcribe(normalized_path)
 
         if error_msg or not transcript:
-            await status_msg.edit_text(error_msg or "I couldn't make that out — mind re-recording? 🎙️")
+            await status_msg.edit_text(format_audio_error(error_msg), parse_mode="Markdown")
             return
 
         await status_msg.edit_text(
-            "⚡ **Synthesizing intelligence...**\n_Extracting tasks & arming reminders..._",
+            format_synthesizing_dump(),
             parse_mode="Markdown",
         )
 
@@ -609,9 +603,7 @@ async def handle_voice_message(message: Message, bot: Bot) -> None:
 
     except Exception as e:
         logger.error(f"Error processing voice dump: {e}", exc_info=True)
-        await status_msg.edit_text(
-            "⚠️ An error occurred while processing your voice note. Please try again or send as text."
-        )
+        await status_msg.edit_text(format_generic_error(), parse_mode="Markdown")
     finally:
         # Guarantee privacy cleanup of audio files
         if raw_audio_path:
@@ -640,7 +632,7 @@ async def handle_text_message(message: Message) -> None:
         return
 
     status_msg = await message.answer(
-        "⚡ **Analyzing brain dump...**\n_Extracting action items & scheduling timers..._",
+        format_analyzing_text(),
         parse_mode="Markdown",
     )
 
@@ -690,6 +682,4 @@ async def handle_text_message(message: Message) -> None:
 
     except Exception as e:
         logger.error(f"Error processing text dump: {e}", exc_info=True)
-        await status_msg.edit_text(
-            "⚠️ An error occurred while processing your message. Please try again."
-        )
+        await status_msg.edit_text(format_generic_error(), parse_mode="Markdown")
