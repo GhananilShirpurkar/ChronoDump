@@ -47,12 +47,15 @@ def format_timezone_updated(new_tz: str) -> str:
 
 def format_response_card(dump: ExtractedDump) -> str:
     """
-    Format the Telegram response card with clean visual hierarchy, summary quote, and badges.
+    Format the Telegram response card with clean visual hierarchy, summary quote,
+    and polished badges (PRD Section 15).
     """
     header = "⚡ **Sorted. Here's your dump:**"
     if dump.summary and dump.summary.strip():
-        header += f"\n💬 _\"{dump.summary.strip()}\"_\n────────────────────────────"
-    
+        header += f"\n💬 _\"{dump.summary.strip()}\"_\n━━━━━━━━━━━━━━━━━━━━"
+    else:
+        header += "\n━━━━━━━━━━━━━━━━━━━━"
+
     sections: List[str] = [header]
 
     # 1. Clean Notes
@@ -88,12 +91,12 @@ def format_response_card(dump: ExtractedDump) -> str:
     # Check for empty state (Failure 4 — No tasks/deadlines)
     has_tasks = bool(dump.scheduled_reminders or dump.vague_reminders or dump.action_items)
     if not has_tasks and not dump.clean_notes:
-        return "⚡ **Sorted.**\n\nNo tasks or context detected in dump."
+        return "⚡ **Sorted.**\n\nNo actionable tasks or context detected in dump."
 
     if not has_tasks:
-        sections.append("\n_No deadlines heard._")
+        sections.append("\n━━━━━━━━━━━━━━━━━━━━\n_No deadlines heard._")
     else:
-        sections.append("\n────────────────────────────\n_I'll buzz you right here when it's time. 🫡_")
+        sections.append("\n━━━━━━━━━━━━━━━━━━━━\nI'll buzz you right here when it's time. 🫡")
 
     return "\n".join(sections)
 
@@ -161,49 +164,73 @@ def format_clarification_prompt(task: str, window: str) -> str:
 def format_today_agenda(now: datetime, reminders: list, actions: list, notes_count: int) -> str:
     """Format daily briefing for /today."""
     date_str = now.strftime("%A, %b %-d")
-    lines = [f"📅 **Today's Agenda — {date_str}**\n"]
+    lines = [
+        f"📅 **Today's Agenda — {date_str}**\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    ]
 
     if reminders:
-        lines.append(f"⏰ **ARMED FOR TODAY ({len(reminders)})**")
+        lines.append(f"\n⏰ **ARMED FOR TODAY ({len(reminders)})**")
         for r in reminders:
             status_emoji = "⏳" if r.status == "snoozed" else "🔔"
-            lines.append(f"{status_emoji} `{r.display_time}` — **{r.task}**")
+            lines.append(f"• {status_emoji} `{r.display_time}` ➔ **{r.task}**")
     else:
-        lines.append("⏰ **ARMED FOR TODAY**\n_No reminders scheduled for today!_")
+        lines.append("\n⏰ **ARMED FOR TODAY**\n_No reminders scheduled for today! Enjoy your flow._")
 
     lines.append("")
     if actions:
         lines.append(f"✅ **OPEN ACTION ITEMS ({len(actions)})**")
         for act in actions[:8]:
-            lines.append(f"◻️ {act['action']}")
+            lines.append(f"• ◻️ {act['action']}")
         if len(actions) > 8:
             lines.append(f"_...and {len(actions) - 8} more_")
     else:
         lines.append("✅ **OPEN ACTION ITEMS**\n_No pending action items._")
 
-    lines.append(f"\n💡 *Total Clean Notes stored: {notes_count}* (type /notes to browse)")
+    lines.append(
+        "\n━━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 _{notes_count} clean notes in storage • Browse with /notes or manage /queue_"
+    )
     return "\n".join(lines)
 
 
 def format_queue_header(count: int) -> str:
     """Header for /queue list."""
     if count == 0:
-        return "📭 **Reminder Queue is empty!**\n\nSend a voice note or text dump to arm reminders."
-    return f"📋 **Active Reminder Queue ({count} pending):**\n\nManage each reminder below:"
+        return (
+            "📭 **Reminder Queue is empty!**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "Send a voice note or text dump to arm reminders."
+        )
+    return (
+        f"📋 **Active Reminder Queue ({count} pending):**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Manage each reminder below:"
+    )
 
 
 def format_notes_view(notes: list) -> str:
     """Format /notes repository view."""
     if not notes:
-        return "📋 **Your Clean Notes Repository**\n\n_No notes stored yet! Send a voice dump with any thoughts, ideas, or context._"
+        return (
+            "📋 **Your Clean Notes Repository**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "_No notes stored yet! Send a voice dump with any thoughts, ideas, or context._"
+        )
 
-    lines = ["📋 **Your Clean Notes Repository**\n"]
+    lines = [
+        "📋 **Your Clean Notes Repository**\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    ]
     for item in notes[:15]:
         created_str = item["created_at"].strftime("%b %-d") if item.get("created_at") else ""
         date_badge = f" *({created_str})*" if created_str else ""
         lines.append(f"• {item['note']}{date_badge}")
 
-    lines.append("\n💡 _Notes with no deadlines are preserved here so your brain dump stays organized._")
+    lines.append(
+        "\n━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 _Notes with no deadlines are preserved here so your brain dump stays organized._"
+    )
     return "\n".join(lines)
 
 
@@ -213,27 +240,30 @@ def format_focus_status(focus_until: Optional[datetime], now: datetime) -> str:
         remaining_mins = max(1, int((focus_until - now).total_seconds() / 60))
         time_str = focus_until.strftime("%I:%M %p")
         return (
-            "🧘 **Focus Mode is ACTIVE**\n\n"
-            f"Alerts are paused until **{time_str}** (~{remaining_mins} min remaining).\n"
+            "🧘 **Focus Mode is ACTIVE**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🛡️ Alerts are paused until **{time_str}** (~{remaining_mins} min remaining).\n"
             "Any reminders that fire during this time will be politely delayed until your focus block ends.\n\n"
             "Choose a quick duration below to extend or turn it off:"
         )
     return (
-        "🧘 **Focus Mode**\n\n"
+        "🧘 **Focus Mode**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "Need uninterrupted deep work? Focus Mode temporarily delays incoming reminders so you can concentrate without distractions.\n\n"
-        "Select a duration to begin:"
+        "⏱️ **Select a duration to begin:**"
     )
 
 
 def format_stats_view(stats: dict) -> str:
     """Format system and local AI observability card for /stats."""
     return (
-        "📊 **ChronoDump System & AI Stats**\n\n"
+        "📊 **ChronoDump System & AI Stats**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 **Local AI Infrastructure**\n"
-        f"• **Speech-to-Text:** `faster-whisper` (`{stats['whisper_model']}` / `{stats['whisper_compute']}` on `{stats['whisper_device']}`)\n"
-        f"• **VAD Filter:** `Silero VAD (500ms min silence)`\n"
+        f"• **Speech Engine:** `faster-whisper` (`{stats['whisper_model']}` / `{stats['whisper_compute']}` on `{stats['whisper_device']}`)\n"
+        f"• **Noise Suppression:** `Silero VAD (500ms speech boundary)`\n"
         f"• **Reasoning LLM:** `Ollama` (`{stats['ollama_model']}`)\n"
-        f"• **Endpoint:** `{stats['ollama_url']}`\n\n"
+        f"• **Model Endpoint:** `{stats['ollama_url']}`\n\n"
         "📈 **Your Activity**\n"
         f"• **Brain Dumps Processed:** `{stats['dump_count']}`\n"
         f"• **Active Reminders:** `{stats['active_reminders']}`\n"

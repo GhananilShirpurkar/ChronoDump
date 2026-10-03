@@ -129,7 +129,11 @@ async def handle_queue_command(message: Message) -> None:
     await message.answer(format_queue_header(len(pending)), parse_mode="Markdown")
     for r in pending[:10]:
         status_emoji = "⏳" if r.status == "snoozed" else "🔔"
-        card = f"{status_emoji} **{r.task}**\n📅 Scheduled: `{r.display_time}`\nStatus: `{r.status}`"
+        card = (
+            f"{status_emoji} **{r.task}**\n"
+            f"• ⏰ Scheduled: `{r.display_time}`\n"
+            f"• 📌 Status: `{r.status.upper()}`"
+        )
         await message.answer(card, reply_markup=get_queue_item_keyboard(r.id), parse_mode="Markdown")
 
 
@@ -215,17 +219,19 @@ async def handle_export_command(message: Message) -> None:
 async def handle_help(message: Message) -> None:
     """Handle /help command with full command directory."""
     text = (
-        "🤖 **ChronoDump Command Center**\n\n"
-        "Just talk or type to dump messy thoughts — ChronoDump organizes them and sets auto-armed reminders.\n\n"
-        "**Available Slash Commands:**\n"
-        "/today — Today's agenda, armed reminders & open action items\n"
-        "/queue — View and manage all active reminders interactively\n"
-        "/notes — Browse your clean notes & context repository\n"
-        "/focus — Deep work mode: pause notifications for N hours (e.g. `/focus 2h`)\n"
-        "/stats — Local AI model info, latency & activity metrics\n"
-        "/export — Export your notes and tasks into a `.md` file\n"
-        "/timezone — Check or change your active timezone\n"
-        "/help — Show this help manual"
+        "⚡ **ChronoDump Command Center**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "_Turn raw audio chaos into structured plans and auto-armed reminders._\n\n"
+        "🎯 **Available Slash Commands:**\n"
+        "• `/today` — Today's mission radar & armed reminders\n"
+        "• `/queue` — View & manage all upcoming alerts interactively\n"
+        "• `/notes` — Browse your clean notes & knowledge base\n"
+        "• `/focus` — Silence alerts for deep work (`/focus 1h` or tap buttons)\n"
+        "• `/stats` — Local AI engine specs & activity metrics\n"
+        "• `/export` — Export all notes & tasks to a Markdown file\n"
+        "• `/timezone` — Check or change your active timezone\n"
+        "• `/help` — Display this command manual\n\n"
+        "💡 **Pro-Tip:** Just drop or forward a voice note anytime. ChronoDump automatically listens, extracts tasks, and arms the reminders for you."
     )
     await message.answer(text, parse_mode="Markdown")
 
@@ -526,7 +532,10 @@ async def handle_voice_message(message: Message, bot: Bot) -> None:
     user = get_or_create_user(message.from_user.id)
     user_tz = ZoneInfo(user.timezone)
 
-    status_msg = await message.answer("🎧 _Listening to voice note..._", parse_mode="Markdown")
+    status_msg = await message.answer(
+        "🎙️ **Transcribing voice note...**\n_Filtering background noise with Silero VAD..._",
+        parse_mode="Markdown",
+    )
 
     file_id = message.voice.file_id if message.voice else message.audio.file_id
     raw_audio_path = None
@@ -546,7 +555,10 @@ async def handle_voice_message(message: Message, bot: Bot) -> None:
             await status_msg.edit_text(error_msg or "I couldn't make that out — mind re-recording? 🎙️")
             return
 
-        await status_msg.edit_text("🧠 _Organizing thoughts and scheduling..._", parse_mode="Markdown")
+        await status_msg.edit_text(
+            "⚡ **Synthesizing intelligence...**\n_Extracting tasks & arming reminders..._",
+            parse_mode="Markdown",
+        )
 
         # Extract structured items via LLM & deterministic temporal engine
         extracted, is_degraded = await llm_client.extract_dump(transcript, user_tz)
@@ -627,7 +639,10 @@ async def handle_text_message(message: Message) -> None:
         await message.answer(format_timezone_updated(text), parse_mode="Markdown")
         return
 
-    status_msg = await message.answer("🧠 _Organizing thoughts and scheduling..._", parse_mode="Markdown")
+    status_msg = await message.answer(
+        "⚡ **Analyzing brain dump...**\n_Extracting action items & scheduling timers..._",
+        parse_mode="Markdown",
+    )
 
     try:
         now = datetime.now(user_tz)
