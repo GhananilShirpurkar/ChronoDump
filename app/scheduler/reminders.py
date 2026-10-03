@@ -47,6 +47,18 @@ async def execute_reminder_job(reminder_id: int) -> None:
         logger.info(f"Skipping reminder {reminder_id} with status '{reminder.status}'")
         return
 
+    # Check if user is currently in Focus Mode
+    from datetime import timedelta
+    from app.storage.database import get_user_focus, snooze_reminder
+    from app.scheduler.jobs import scheduler_service
+    focus_until = get_user_focus(reminder.user_id)
+    if focus_until:
+        logger.info(f"User {reminder.user_id} in Focus Mode until {focus_until}. Postponing reminder {reminder_id}.")
+        new_target = focus_until + timedelta(seconds=1)
+        new_job_id = scheduler_service.reschedule_reminder(reminder_id, new_target)
+        snooze_reminder(reminder_id, new_target, f"Delayed by Focus Mode until {focus_until.strftime('%I:%M %p')}", new_job_id)
+        return
+
     bot = get_bot_instance()
     if not bot:
         logger.error(f"Cannot deliver reminder {reminder_id}: Bot instance not initialized!")

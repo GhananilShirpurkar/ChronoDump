@@ -20,6 +20,7 @@ class User(Base):
 
     telegram_id = Column(BigInteger, primary_key=True, index=True)
     timezone = Column(String(64), nullable=False, default="UTC")
+    focus_until = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 

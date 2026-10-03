@@ -90,3 +90,33 @@ def get_degraded_arm_keyboard(dump_id: int) -> InlineKeyboardMarkup:
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_focus_keyboard(is_active: bool = False) -> InlineKeyboardMarkup:
+    """Return quick buttons for setting or ending Focus Mode."""
+    buttons = [
+        [
+            InlineKeyboardButton(text="30 min", callback_data="focus:set:30"),
+            InlineKeyboardButton(text="1 hour", callback_data="focus:set:60"),
+        ],
+        [
+            InlineKeyboardButton(text="2 hours", callback_data="focus:set:120"),
+            InlineKeyboardButton(text="4 hours", callback_data="focus:set:240"),
+        ],
+    ]
+    if is_active:
+        buttons.append([InlineKeyboardButton(text="🛑 Turn Off Focus Mode", callback_data="focus:off")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_queue_item_keyboard(reminder_id: int) -> InlineKeyboardMarkup:
+    """Return action buttons for an individual reminder in the /queue view."""
+    keyboard = [
+        [
+            InlineKeyboardButton(text="✅ Done", callback_data=f"qrem:done:{reminder_id}"),
+            InlineKeyboardButton(text="⏳ +30m", callback_data=f"qrem:snooze:{reminder_id}"),
+            InlineKeyboardButton(text="❌ Cancel", callback_data=f"qrem:cancel:{reminder_id}"),
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

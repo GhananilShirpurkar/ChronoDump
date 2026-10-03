@@ -12,6 +12,8 @@ from aiogram.types import CallbackQuery, Message
 from app.bot.keyboards import (
     get_clarification_keyboard,
     get_degraded_arm_keyboard,
+    get_focus_keyboard,
+    get_queue_item_keyboard,
     get_reminder_action_keyboard,
     get_reminder_confirm_done_keyboard,
     get_reminder_undo_keyboard,
@@ -19,13 +21,18 @@ from app.bot.keyboards import (
 )
 from app.bot.messages import (
     format_confirm_completion,
+    format_focus_status,
+    format_notes_view,
+    format_queue_header,
     format_response_card,
     format_start_welcome,
+    format_stats_view,
     format_task_completed,
     format_task_restored,
     format_task_snoozed,
     format_timezone_prompt,
     format_timezone_updated,
+    format_today_agenda,
 )
 from app.config import settings
 from app.ingestion.audio import AudioIngestion
@@ -34,15 +41,24 @@ from app.intelligence.llm import LLMClient
 from app.intelligence.temporal import TemporalEngine
 from app.scheduler.jobs import scheduler_service
 from app.storage.database import (
+    cancel_reminder,
     complete_reminder,
     create_dump,
     create_reminder,
     create_vague_clarification,
+    get_export_markdown,
     get_or_create_user,
+    get_pending_reminders,
+    get_recent_action_items,
+    get_recent_notes,
     get_reminder,
+    get_stats,
+    get_today_reminders,
+    get_user_focus,
     get_user_timezone,
     get_vague_clarification,
     resolve_vague_clarification,
+    set_user_focus,
     snooze_reminder,
     undo_complete_reminder,
     update_user_timezone,
@@ -86,18 +102,130 @@ async def handle_timezone_command(message: Message) -> None:
     )
 
 
+@router.message(Command("today", "digest"))
+async def handle_today_command(message: Message) -> None:
+    """Handle /today or /digest — show daily agenda and reminders."""
+    if not message.from_user:
+        return
+    user_tz = get_user_timezone(message.from_user.id)
+    now = datetime.now(user_tz)
+    today_reminders = get_today_reminders(message.from_user.id, user_tz)
+    open_actions = get_recent_action_items(message.from_user.id, limit=8)
+    notes = get_recent_notes(message.from_user.id, limit=100)
+    text = format_today_agenda(now, today_reminders, open_actions, len(notes))
+    await message.answer(text, parse_mode="Markdown")
+
+
+@router.message(Command("queue", "reminders"))
+async def handle_queue_command(message: Message) -> None:
+    """Handle /queue or /reminders — interactive list of all active reminders."""
+    if not message.from_user:
+        return
+    pending = get_pending_reminders(message.from_user.id)
+    if not pending:
+        await message.answer(format_queue_header(0), parse_mode="Markdown")
+        return
+
+    await message.answer(format_queue_header(len(pending)), parse_mode="Markdown")
+    for r in pending[:10]:
+        status_emoji = "⏳" if r.status == "snoozed" else "🔔"
+        card = f"{status_emoji} **{r.task}**\n📅 Scheduled: `{r.display_time}`\nStatus: `{r.status}`"
+        await message.answer(card, reply_markup=get_queue_item_keyboard(r.id), parse_mode="Markdown")
+
+
+@router.message(Command("notes"))
+async def handle_notes_command(message: Message) -> None:
+    """Handle /notes — view clean notes and context repository."""
+    if not message.from_user:
+        return
+    notes = get_recent_notes(message.from_user.id, limit=20)
+    await message.answer(format_notes_view(notes), parse_mode="Markdown")
+
+
+@router.message(Command("focus"))
+async def handle_focus_command(message: Message) -> None:
+    """Handle /focus command — pause reminders for deep work."""
+    if not message.from_user:
+        return
+
+    args = (message.text or "").split()[1:]
+    now = datetime.now(timezone.utc)
+
+    if args:
+        arg = args[0].lower().strip()
+        if arg in ("off", "stop", "cancel", "end"):
+            set_user_focus(message.from_user.id, None)
+            await message.answer("🛑 **Focus Mode ended.** All notifications restored.", parse_mode="Markdown")
+            return
+
+        # Parse duration (e.g. 2h, 30m, 90m, 1.5h)
+        import re
+        match = re.match(r"^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes?)?$", arg)
+        if match:
+            val = float(match.group(1))
+            unit = match.group(2) or "m"
+            mins = int(val * 60) if unit.startswith("h") else int(val)
+            focus_until = now + timedelta(minutes=mins)
+            set_user_focus(message.from_user.id, focus_until)
+            time_str = focus_until.astimezone(get_user_timezone(message.from_user.id)).strftime("%I:%M %p")
+            await message.answer(
+                f"🧘 **Focus Mode activated for {mins} minutes** (until {time_str}).\n\n"
+                "Reminders will be delayed until your focus block ends. Use `/focus off` to cancel anytime.",
+                reply_markup=get_focus_keyboard(is_active=True),
+                parse_mode="Markdown",
+            )
+            return
+
+    current_focus = get_user_focus(message.from_user.id)
+    text = format_focus_status(current_focus, now)
+    await message.answer(text, reply_markup=get_focus_keyboard(is_active=bool(current_focus)), parse_mode="Markdown")
+
+
+@router.message(Command("stats"))
+async def handle_stats_command(message: Message) -> None:
+    """Handle /stats — system health, local AI and user statistics."""
+    if not message.from_user:
+        return
+    stats = get_stats(message.from_user.id)
+    await message.answer(format_stats_view(stats), parse_mode="Markdown")
+
+
+@router.message(Command("export"))
+async def handle_export_command(message: Message) -> None:
+    """Handle /export — export notes, tasks, and reminders as Markdown document."""
+    if not message.from_user:
+        return
+    from aiogram.types import BufferedInputFile
+
+    user_tz = get_user_timezone(message.from_user.id)
+    md_content = get_export_markdown(message.from_user.id, user_tz)
+    date_str = datetime.now(user_tz).strftime("%Y%m%d")
+
+    file_bytes = md_content.encode("utf-8")
+    doc = BufferedInputFile(file_bytes, filename=f"ChronoDump_Export_{date_str}.md")
+
+    await message.answer_document(
+        doc,
+        caption="📦 **Here is your complete ChronoDump export in Markdown!**\n\nReady to drop into Obsidian, Notion, or Apple Notes.",
+        parse_mode="Markdown",
+    )
+
+
 @router.message(Command("help"))
 async def handle_help(message: Message) -> None:
-    """Handle /help command with usage overview."""
+    """Handle /help command with full command directory."""
     text = (
-        "🤖 **ChronoDump Help**\n\n"
-        "• Send or forward a **voice note** or **text message** containing your thoughts, tasks, and deadlines.\n"
-        "• ChronoDump cleans up the notes, extracts tasks, and automatically arms reminders.\n"
-        "• If deadlines are vague (e.g. _this weekend_), ChronoDump will ask for clarification at the right moment.\n\n"
-        "**Commands:**\n"
-        "/start — Welcome & setup\n"
-        "/timezone — Change timezone\n"
-        "/help — Show this guide"
+        "🤖 **ChronoDump Command Center**\n\n"
+        "Just talk or type to dump messy thoughts — ChronoDump organizes them and sets auto-armed reminders.\n\n"
+        "**Available Slash Commands:**\n"
+        "/today — Today's agenda, armed reminders & open action items\n"
+        "/queue — View and manage all active reminders interactively\n"
+        "/notes — Browse your clean notes & context repository\n"
+        "/focus — Deep work mode: pause notifications for N hours (e.g. `/focus 2h`)\n"
+        "/stats — Local AI model info, latency & activity metrics\n"
+        "/export — Export your notes and tasks into a `.md` file\n"
+        "/timezone — Check or change your active timezone\n"
+        "/help — Show this help manual"
     )
     await message.answer(text, parse_mode="Markdown")
 
@@ -130,6 +258,77 @@ async def handle_timezone_callback(callback: CallbackQuery) -> None:
         await callback.answer(f"Timezone set to {selected_tz}")
     else:
         await callback.answer("Invalid timezone. Please try another.", show_alert=True)
+
+
+# ---------------------------------------------------------------------------
+# Focus Callbacks
+# ---------------------------------------------------------------------------
+
+@router.callback_query(F.data.startswith("focus:"))
+async def handle_focus_callback(callback: CallbackQuery) -> None:
+    """Handle interactive Focus Mode button clicks."""
+    if not callback.data or not callback.from_user:
+        return
+    parts = callback.data.split(":")
+    action = parts[1]
+
+    if action == "off":
+        set_user_focus(callback.from_user.id, None)
+        await callback.message.edit_text("🛑 **Focus Mode ended.** All notifications restored.", parse_mode="Markdown")
+        await callback.answer("Focus Mode turned off.")
+        return
+
+    if action == "set":
+        mins = int(parts[2])
+        now = datetime.now(timezone.utc)
+        focus_until = now + timedelta(minutes=mins)
+        set_user_focus(callback.from_user.id, focus_until)
+        await callback.message.edit_text(
+            format_focus_status(focus_until, now),
+            reply_markup=get_focus_keyboard(is_active=True),
+            parse_mode="Markdown",
+        )
+        await callback.answer(f"Focus set for {mins} minutes!")
+
+
+# ---------------------------------------------------------------------------
+# Queue Action Callbacks (Done, Snooze, Cancel)
+# ---------------------------------------------------------------------------
+
+@router.callback_query(F.data.startswith("qrem:"))
+async def handle_queue_reminder_action(callback: CallbackQuery) -> None:
+    """Handle Done, Snooze, and Cancel directly from /queue list."""
+    if not callback.data or not callback.from_user:
+        return
+    parts = callback.data.split(":")
+    action = parts[1]
+    reminder_id = int(parts[2])
+
+    reminder = get_reminder(reminder_id)
+    if not reminder:
+        await callback.answer("Reminder not found.", show_alert=True)
+        return
+
+    if action == "done":
+        complete_reminder(reminder_id)
+        await callback.message.edit_text(f"✅ Marked **{reminder.task}** complete!", parse_mode="Markdown")
+        await callback.answer("Marked done! ✅")
+
+    elif action == "snooze":
+        user_tz = get_user_timezone(callback.from_user.id)
+        now = datetime.now(user_tz)
+        new_target = now + timedelta(minutes=30)
+        new_display = TemporalEngine.format_display_time(new_target, now)
+        new_job_id = scheduler_service.reschedule_reminder(reminder_id, new_target)
+        snooze_reminder(reminder_id, new_target, new_display, new_job_id)
+        await callback.message.edit_text(f"⏳ Snoozed **{reminder.task}** for 30 minutes (until {new_display}).", parse_mode="Markdown")
+        await callback.answer("Snoozed +30m! ⏳")
+
+    elif action == "cancel":
+        cancel_reminder(reminder_id)
+        scheduler_service.cancel_job(f"rem_{reminder_id}")
+        await callback.message.edit_text(f"❌ Cancelled reminder: **{reminder.task}**", parse_mode="Markdown")
+        await callback.answer("Reminder cancelled.")
 
 
 # ---------------------------------------------------------------------------

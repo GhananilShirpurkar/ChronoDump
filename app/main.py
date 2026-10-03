@@ -59,6 +59,24 @@ async def main() -> None:
     logger.info("Starting persistent scheduler service...")
     scheduler_service.start(bot)
 
+    # Register bot slash commands menu with Telegram
+    try:
+        from aiogram.types import BotCommand
+        commands = [
+            BotCommand(command="today", description="Today's agenda, armed reminders & actions"),
+            BotCommand(command="queue", description="Interactive active reminders queue"),
+            BotCommand(command="notes", description="Browse clean notes repository"),
+            BotCommand(command="focus", description="Focus Mode: delay alerts for deep work"),
+            BotCommand(command="stats", description="Local AI and system metrics"),
+            BotCommand(command="export", description="Export notes & tasks as Markdown"),
+            BotCommand(command="timezone", description="Check or update timezone"),
+            BotCommand(command="help", description="Help & command directory"),
+        ]
+        await bot.set_my_commands(commands)
+        logger.info("Bot slash commands registered with Telegram.")
+    except Exception as e:
+        logger.warning(f"Failed to register bot commands with Telegram: {e}")
+
     try:
         logger.info("Starting bot polling loop...")
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
