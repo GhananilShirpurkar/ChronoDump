@@ -1,14 +1,15 @@
 # ==============================================================================
-# ChronoDump Dockerfile
+# ChronoDump Production Container Dockerfile
 # ==============================================================================
 FROM python:3.12-slim
 
-# Prevent Python from buffering stdout/stderr and writing pyc files
+# Prevent Python buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
     PIP_NO_CACHE_DIR=1
 
-# Install system dependencies: ffmpeg for audio normalization, curl for healthchecks
+# Install runtime system packages: ffmpeg (audio normalization), curl (probes)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
@@ -17,20 +18,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python package dependencies
+# Install Python dependencies first for optimal Docker layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source code
+# Copy source code and scripts
 COPY app/ app/
 COPY scripts/ scripts/
 COPY README.md .
 
-# Ensure data directory exists
-RUN mkdir -p data/audio
+# Create volume mount points and permissions
+RUN mkdir -p /app/data/audio /app/data/backups
 
-# Expose data volume
+# Expose volume for persistent SQLite storage and Whisper models
 VOLUME ["/app/data"]
 
-# Default entrypoint
+# Container health probe
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python scripts/healthcheck.py || exit 1
+
+# Default runtime command
 CMD ["python", "-m", "app.main"]

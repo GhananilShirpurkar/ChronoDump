@@ -1,29 +1,34 @@
 version: '3.8'
 
 # ==============================================================================
-# ChronoDump Docker Compose (Host Ollama Mode)
-# Runs the containerized bot while connecting to your local host Ollama service.
+# ChronoDump Full-Stack Docker Compose (All-in-One Mode)
+# Runs both the Ollama LLM server and ChronoDump inside container network.
 # ==============================================================================
 
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: chronodump-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
   chronodump:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: chronodump-bot
     restart: unless-stopped
+    depends_on:
+      - ollama
     env_file:
       - .env
     environment:
-      # Points to host machine where native Ollama is running
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-    extra_hosts:
-      # Enables container to reach localhost services on the Linux host
-      - "host.docker.internal:host-gateway"
+      - OLLAMA_BASE_URL=http://ollama:11434
     volumes:
-      # Persists SQLite databases, backups, and audio files
       - ./data:/app/data
-      # Caches Whisper models across container rebuilds
       - whisper_models:/root/.cache/huggingface
     healthcheck:
       test: ["CMD", "python", "scripts/healthcheck.py"]
@@ -33,4 +38,5 @@ services:
       start_period: 15s
 
 volumes:
+  ollama_models:
   whisper_models:

@@ -1,0 +1,48 @@
+# ==============================================================================
+# ChronoDump Production systemd Service Unit
+# For 24/7 background operation, crash auto-recovery, and boot startup.
+#
+# USAGE (User-level systemd - No root needed):
+#   mkdir -p ~/.config/systemd/user/
+#   cp chronodump.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable chronodump
+#   systemctl --user start chronodump
+#   loginctl enable-linger $USER   # (Keeps bot running after logout/reboot)
+#
+# USAGE (System-wide systemd - Requires sudo):
+#   sudo cp chronodump.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable chronodump
+#   sudo systemctl start chronodump
+# ==============================================================================
+
+[Unit]
+Description=ChronoDump Autonomous Telegram Intelligence Agent
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust WorkingDirectory and ExecStart to your absolute installation path if moved
+WorkingDirectory=/home/koanoir/Desktop/Projects/04_hackathons/ChronoDump
+ExecStart=/home/koanoir/Desktop/Projects/04_hackathons/ChronoDump/.venv/bin/python -m app.main
+
+# Load environment configuration
+EnvironmentFile=/home/koanoir/Desktop/Projects/04_hackathons/ChronoDump/.env
+Environment=PYTHONUNBUFFERED=1
+
+# Restart policy: Auto-restart on unexpected crashes with exponential backoff
+Restart=always
+RestartSec=5s
+
+# Graceful termination
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+# Logging to system journal
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
