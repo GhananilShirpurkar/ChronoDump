@@ -8,34 +8,52 @@ from app.intelligence.schema import ExtractedDump
 def format_start_welcome(user_id: int) -> str:
     """Return welcome message on /start."""
     return (
-        "👋 **Welcome to ChronoDump!**\n\n"
-        "Turn raw audio chaos into structured plans and auto-armed reminders.\n\n"
-        "Just send or forward me a voice note or plain text message whenever a thought hits you.\n\n"
-        "To get started, please select your timezone so all reminders trigger at the right moment:"
+        "⚡ **Welcome to ChronoDump!**\n"
+        "_Turn raw audio chaos into structured plans and auto-armed reminders._\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🗣️ **How it works:**\n"
+        "• Just send or forward a voice note or messy text dump whenever a thought hits you.\n"
+        "• ChronoDump cleans up the notes, extracts action items, and understands relative time.\n"
+        "• Reminders are **automatically armed** — no manual forms or date pickers!\n\n"
+        "🌍 To get started, please select your active timezone below:"
     )
 
 
 def format_unauthorized_rejection() -> str:
     """Return security rejection message for unauthorized users."""
-    return "🔒 **Access Restricted**\n\nThis ChronoDump instance is configured for single-user personal use only."
+    return (
+        "🔒 **Access Restricted**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "This ChronoDump instance is configured for single-user personal privacy only."
+    )
 
 
 def format_timezone_prompt(current_tz: Optional[str] = None) -> str:
     """Format timezone selection prompt."""
     status = f"\nCurrently set to: `{current_tz}`" if current_tz else ""
-    return f"🌍 **What timezone are you in?**{status}\n\nSelect an option below or choose custom to type your offset:"
+    return (
+        f"🌍 **What timezone are you in?**{status}\n\n"
+        "Select an option below or choose custom to type your offset:"
+    )
 
 
 def format_timezone_updated(new_tz: str) -> str:
     """Confirmation message after setting timezone."""
-    return f"✅ Timezone updated to `{new_tz}`.\n\nYou're all set! Send me a voice note or text dump whenever you're ready."
+    return (
+        f"✅ **Timezone updated to** `{new_tz}`\n\n"
+        "You're all set! Send me a voice note or text dump whenever you're ready. 🤙"
+    )
 
 
 def format_response_card(dump: ExtractedDump) -> str:
     """
-    Format the Telegram response card exactly according to PRD Section 15.
+    Format the Telegram response card with clean visual hierarchy, summary quote, and badges.
     """
-    sections: List[str] = ["⚡ **Sorted. Here's your dump:**"]
+    header = "⚡ **Sorted. Here's your dump:**"
+    if dump.summary and dump.summary.strip():
+        header += f"\n💬 _\"{dump.summary.strip()}\"_\n────────────────────────────"
+    
+    sections: List[str] = [header]
 
     # 1. Clean Notes
     if dump.clean_notes:
@@ -64,7 +82,7 @@ def format_response_card(dump: ExtractedDump) -> str:
         vague_lines = ["\n🔍 **NEEDS A NUDGE**"]
         for v in dump.vague_reminders:
             opts_summary = " or ".join(v.options[:2]) if v.options else "when to remind you"
-            vague_lines.append(f"◻️ {v.task}\n   _I'll ask you soon: {opts_summary}?_")
+            vague_lines.append(f"◻️ {v.task}\n   └ 💬 _I'll ask you: {opts_summary}?_")
         sections.append("\n".join(vague_lines))
 
     # Check for empty state (Failure 4 — No tasks/deadlines)
@@ -75,7 +93,7 @@ def format_response_card(dump: ExtractedDump) -> str:
     if not has_tasks:
         sections.append("\n_No deadlines heard._")
     else:
-        sections.append("\n_I'll buzz you right here when it's time. 🫡_")
+        sections.append("\n────────────────────────────\n_I'll buzz you right here when it's time. 🫡_")
 
     return "\n".join(sections)
 
@@ -83,8 +101,9 @@ def format_response_card(dump: ExtractedDump) -> str:
 def format_reminder_alert(task: str) -> str:
     """Format reminder alert when trigger time is reached (PRD Section 17)."""
     return (
-        "⏰ **Heads up:**\n\n"
-        f"**{task}**\n\n"
+        "⏰ **Heads up:**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 **{task}**\n\n"
         "You wanted this done right now."
     )
 
@@ -92,34 +111,39 @@ def format_reminder_alert(task: str) -> str:
 def format_confirm_completion(task: str) -> str:
     """Format confirmation prompt before marking task complete (PRD Section 18)."""
     return (
-        f"Mark this task as complete?\n\n"
-        f"**{task}**"
+        "Mark this task as complete?\n\n"
+        f"📌 **{task}**"
     )
 
 
 def format_task_completed(task: str) -> str:
     """Format task marked complete confirmation."""
     return (
-        "✅ **Done.**\n\n"
-        f"_{task}_ marked complete."
+        "✅ **Done.**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"✓ _{task}_ marked complete.\n\n"
+        "_Great progress! You can undo this within 60 seconds if needed._"
     )
 
 
 def format_task_snoozed(task: str, display_time: str) -> str:
     """Format snooze confirmation (PRD Section 19)."""
     return (
-        "⏳ **Snoozed for 30 minutes:**\n\n"
-        f"**{task}**\n\n"
-        f"I'll buzz you at {display_time}."
+        "⏳ **Snoozed for 30 minutes:**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 **{task}**\n\n"
+        f"🔔 Next buzz at: `{display_time}`\n\n"
+        "_Take your time — I'll ping you again then._"
     )
 
 
 def format_task_restored(task: str) -> str:
     """Format task restored from undo."""
     return (
-        "↩️ **Task restored:**\n\n"
-        f"**{task}**\n\n"
-        "You can mark it done or snooze whenever you are ready."
+        "↩️ **Task restored:**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 **{task}**\n\n"
+        "_Back on your active radar. Mark it done or snooze whenever you are ready._"
     )
 
 
@@ -127,9 +151,10 @@ def format_clarification_prompt(task: str, window: str) -> str:
     """Format vague deadline clarification prompt (PRD Section 12)."""
     window_label = window.replace("_", " ")
     return (
-        "🔍 **Needs clarification:**\n\n"
-        f"**{task}**\n\n"
-        f"You mentioned this for {window_label}. When should I remind you?"
+        "🔍 **Needs clarification:**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 **{task}**\n\n"
+        f"You mentioned this for *{window_label}*. When should I remind you?"
     )
 
 
